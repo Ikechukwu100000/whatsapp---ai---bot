@@ -1,12 +1,12 @@
-// whatsapp-ai-bot - app.js
+// whatsapp-ai-bot - app.js - Pairing Code version
 const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PHONE_NUMBER = process.env.PHONE_NUMBER || ''; // e.g. 2348012345678 - no +
 
-// Keep Render alive
 app.get('/', (req, res) => {
   res.send('WhatsApp AI Bot is running');
 });
@@ -17,10 +17,26 @@ async function startBot() {
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: true,
   });
 
   sock.ev.on('creds.update', saveCreds);
+
+  // Pairing Code - only if not registered yet
+  if (!sock.authState.creds.registered) {
+    if (!PHONE_NUMBER) {
+      console.log('ERROR: Set PHONE_NUMBER in Render Environment Variables!');
+    } else {
+      setTimeout(async () => {
+        try {
+          const code = await sock.requestPairingCode(PHONE_NUMBER);
+          console.log('PAIRING CODE: ' + code);
+          console.log('Go WhatsApp > Linked Devices > Link a device > Link with phone number > enter this code');
+        } catch (e) {
+          console.log('Pairing code error:', e.message);
+        }
+      }, 3000);
+    }
+  }
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update;
@@ -47,10 +63,8 @@ async function startBot() {
 
     console.log('Message from', from, ':', text);
 
-    // Simple AI reply - replace this with OpenAI later
     let reply = '';
     const lower = text.toLowerCase();
-
     if (lower.includes('hi') || lower.includes('hello')) {
       reply = 'Hello! I am your AI assistant. How can I help you today?';
     } else if (lower.includes('who are you')) {
